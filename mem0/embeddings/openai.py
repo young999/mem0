@@ -4,10 +4,10 @@ from mem0.embeddings.base import EmbeddingBase
 
 
 class OpenAIEmbedding(EmbeddingBase):
-    def __init__(self, model="text-embedding-3-small"):
+    def __init__(self, model="text-embedding-3-small", dims=1536):
         self.client = OpenAI()
         self.model = model
-        self.dims = 1536
+        self.dims = dims
 
     def embed(self, text):
         """

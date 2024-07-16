@@ -21,6 +21,8 @@ from mem0.memory.storage import SQLiteManager
 from mem0.memory.telemetry import capture_event
 from mem0.memory.utils import get_update_memory_messages
 from mem0.vector_stores.configs import VectorStoreConfig
+from mem0.llms.configs import LlmConfig
+from mem0.embeddings.configs import EmbedderConfig
 from mem0.vector_stores.qdrant import Qdrant
 
 # Setup user config
@@ -44,20 +46,24 @@ class MemoryConfig(BaseModel):
         description="Configuration for the vector store",
         default_factory=VectorStoreConfig,
     )
+    llm: LlmConfig = Field(
+        description="Configuration for the language model",
+        default_factory=LlmConfig,
+    )
+    embedder: EmbedderConfig = Field(
+        description="Configuration for the embedding model",
+        default_factory=EmbedderConfig,
+    )
     history_db_path: str = Field(
         description="Path to the history database",
         default=os.path.join(mem0_dir, "history.db"),
     )
     collection_name: str = Field(default="mem0", description="Name of the collection")
-    embedding_model_dims: int = Field(
-        default=1536, description="Dimensions of the embedding model"
-    )
 
 
 class Memory(MemoryBase):
     def __init__(self, config: MemoryConfig = MemoryConfig()):
         self.config = config
-        self.embedding_model = OpenAIEmbedding()
         # Initialize the appropriate vector store based on the configuration
         vector_store_config = self.config.vector_store.config
         if self.config.vector_store.provider == "qdrant":
@@ -73,7 +79,19 @@ class Memory(MemoryBase):
                 f"Unsupported vector store type: {self.config.vector_store_type}"
             )
 
-        self.llm = OpenAILLM()
+        if self.config.llm.provider == "ollama":
+            from mem0.llms.ollama import OllamaLLM
+            self.llm = OllamaLLM(model=self.config.llm.config['model'])
+        else:
+            self.llm = OpenAILLM()
+
+        if self.config.embedder.provider == "ollama":
+            from mem0.embeddings.ollama import OllamaEmbedding
+            self.embedding_model = OllamaEmbedding(
+                model=self.config.embedder.config['model']
+            )
+        else:
+            self.embedding_model = OpenAIEmbedding()
         self.db = SQLiteManager(self.config.history_db_path)
         self.collection_name = self.config.collection_name
         self.vector_store.create_col(
@@ -85,13 +103,13 @@ class Memory(MemoryBase):
         capture_event("mem0.init", self)
 
     @classmethod
-    def from_config(cls, config_dict: Dict[str, Any]):
+    def from_config(cls, config: Dict[str, Any]):
         try:
-            config = MemoryConfig(**config_dict)
+            config_data = MemoryConfig(**config)
         except ValidationError as e:
             logging.error(f"Configuration validation error: {e}")
             raise
-        return cls(config)
+        return cls(config_data)
 
     def add(
         self,
@@ -140,7 +158,6 @@ class Memory(MemoryBase):
                 {"role": "user", "content": prompt},
             ]
         )
-        extracted_memories = extracted_memories.choices[0].message.content
         existing_memories = self.vector_store.search(
             name=self.collection_name,
             query=embeddings,
@@ -168,6 +185,10 @@ class Memory(MemoryBase):
         tools = [ADD_MEMORY_TOOL, UPDATE_MEMORY_TOOL, DELETE_MEMORY_TOOL]
         response = self.llm.generate_response(messages=messages, tools=tools)
         response_message = response.choices[0].message
+        print("--------------")
+        print(response_message)
+        print("--------------")
+        import pdb; pdb.set_trace()
         tool_calls = response_message.tool_calls
 
         response = []
