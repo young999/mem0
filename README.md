@@ -114,3 +114,41 @@ If you have any questions, feel free to reach out to us using one of the followi
 - [Join our Slack](https://embedchain.ai/slack)
 - [Follow us on Twitter](https://twitter.com/mem0ai)
 - [Email us](mailto:founders@mem0.ai)
+
+
+
+
+<< 프론트 >>
+
+const fileToBase64 = (file, callback) => {
+  const reader = new FileReader();
+  reader.onload = function (event) {
+    callback(event.target.result.split(',')[1]);
+  };
+  reader.readAsDataURL(file);
+};
+
+
+const addFileToFormData = () => {
+  fileToBase64(file.value[0], function (base64) {
+    formData.set('fileString', base64);
+  });
+};
+
+
+<< 백엔드 >>
+
+public static MultipartFile convert(String base64Image) throws IOException {
+	// Decode Base64 image data
+	byte[] decodedBytes = Base64.getDecoder().decode(base64Image);
+
+	// Create a temporary file to store the decoded image data
+	File tempFile = File.createTempFile("temp-image", ".jpg");
+	try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+	  fos.write(decodedBytes);
+	}
+
+	// Create a MultipartFile from the temporary file
+	return new org.springframework.mock.web.MockMultipartFile(
+			"file", tempFile.getName(), "image/jpeg", decodedBytes);
+}
